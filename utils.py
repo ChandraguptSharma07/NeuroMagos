@@ -2,48 +2,59 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
+import preprocessing
+
 # Draft version - just to see the data
-def plot_frequency_spectrum(signals, fs=512):
-    n = len(signals)
-    # frequency resolution
+def plot_comparison(original, filtered, fs=512, channel_idx=0):
+    """
+    Plots time domain and frequency domain comparison for a single channel.
+    """
+    n = len(original)
     xf = np.fft.rfftfreq(n, 1/fs)
     
     plt.figure(figsize=(15, 10))
     
-    for col in signals.columns:
-        # data, n points
-        yf = np.fft.rfft(signals[col].values)
-        magnitude = np.abs(yf)
-        plt.plot(xf, magnitude, label=col, alpha=0.7)
-        
-    plt.title("Frequency Spectrum (Raw)")
-    plt.xlabel("Frequency (Hz)")
-    plt.ylabel("Magnitude")
+    # Time Domain
+    plt.subplot(2, 1, 1)
+    plt.plot(original[:, channel_idx], label='Raw', alpha=0.5, color='gray')
+    plt.plot(filtered[:, channel_idx], label='Filtered', alpha=0.8, color='blue')
+    plt.title(f"Time Domain Comparison (Channel {channel_idx+1})")
     plt.legend()
     plt.grid(True)
-    # Mark 50Hz just to see
-    plt.axvline(x=50, color='r', linestyle='--', label='50Hz')
+    
+    # Frequency Domain
+    plt.subplot(2, 1, 2)
+    yf_raw = np.abs(np.fft.rfft(original[:, channel_idx]))
+    yf_clean = np.abs(np.fft.rfft(filtered[:, channel_idx]))
+    
+    plt.plot(xf, yf_raw, label='Raw FFT', alpha=0.5, color='gray')
+    plt.plot(xf, yf_clean, label='Filtered FFT', alpha=0.8, color='blue')
+    plt.axvline(x=50, color='red', linestyle='--', label='50Hz Noise')
+    
+    plt.title(f"Frequency Domain Comparison (Channel {channel_idx+1})")
+    plt.xlabel("Frequency (Hz)")
+    plt.legend()
+    plt.grid(True)
+    
+    plt.tight_layout()
     plt.show()
 
 def load_and_view_signals(file_path):
     print(f"Loading: {file_path}")
     
-    # The file has a header "ch1,ch2...". 
     df = pd.read_csv(file_path)
     
-    print("DEBUG: HEAD of data:")
-    print(df.head())
+    # Get raw numpy array (all 8 columns)
+    raw_data = df.iloc[:, :8].values
     
-    # Plotting first 8 columns
-    signals = df.iloc[:, :8]
+    print("Applying Filters...")
+    # 1. Notch Filter (50Hz)
+    filtered_data = preprocessing.apply_notch_filter(raw_data)
+    # 2. Bandpass Filter (20-200Hz)
+    filtered_data = preprocessing.apply_bandpass_filter(filtered_data)
     
-    # Time domain
-    signals.plot(subplots=True, figsize=(15, 10), title="Time Domain")
-    plt.show()
-    
-    # Frequency domain
-    print("Plotting FFT...")
-    plot_frequency_spectrum(signals)
+    print("Plotting comparison for Channel 1...")
+    plot_comparison(raw_data, filtered_data)
 
 if __name__ == "__main__":
     # Just for testing
