@@ -42,10 +42,12 @@ class SynapseDataset(Dataset):
 
         # 2. Load Data
         try:
-            # Skip header if it exists (it does), pandas handles it by default
+            # Skips header, pandas handles it by default
             df = pd.read_csv(file_path)
+
             # Take first 8 columns (channels)
             raw_data = df.iloc[:, :8].values
+            
         except Exception as e:
             print(f"Error loading {file_path}: {e}")
             return torch.zeros(1), torch.tensor(-1)
@@ -68,9 +70,8 @@ class SynapseDataset(Dataset):
         
         return signal_tensor, label_tensor
 
-# Quick verify block
 if __name__ == "__main__":
-    # Test on the current directory structure
+
     dataset = SynapseDataset(root_dir="Synapse_Dataset")
     
     if len(dataset) > 0:
