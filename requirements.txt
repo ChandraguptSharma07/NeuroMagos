@@ -3,3 +3,8 @@ pandas
 torch
 scipy
 matplotlib
+torchvision
+tqdm
+gdown
+scikit-learn
+seaborn

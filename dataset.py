@@ -1,82 +1,49 @@
-import torch
+import torch, glob, os, pandas as pd, numpy as np
 from torch.utils.data import Dataset
-import glob
-import os
-import pandas as pd
-import numpy as np
-import preprocessing
+import preprocessing as pp
 
 class SynapseDataset(Dataset):
-    def __init__(self, root_dir, mode='train'):
-        """
-        Args:
-            root_dir (string): Directory with all the csv files.
-            mode (string): 'train' or 'test' (if we had a split).
-        """
-        self.root_dir = root_dir
-        # Recursive glob to look for all 'gesture*.csv' files in all subfolders
-        self.file_list = glob.glob(os.path.join(root_dir, "**", "gesture*.csv"), recursive=True)
-        
-        # Simple sanity check
-        if len(self.file_list) == 0:
-            print(f"Warning: No files found in {root_dir}")
-        else:
-            print(f"Found {len(self.file_list)} samples.")
+    def __init__(self, root, mode='train'):
+        self.files = glob.glob(os.path.join(root, "**", "gesture*.csv"), recursive=True)
+        self.mode = mode
+        if not self.files: print(f"warn: no files in {root}")
 
-    def __len__(self):
-        return len(self.file_list)
+    def __len__(self): return len(self.files)
 
     def __getitem__(self, idx):
-        file_path = self.file_list[idx]
+        f = self.files[idx]
         
-        # 1. Parse Label
-        # Filename example: gesture00_trial01.csv
-        filename = os.path.basename(file_path)
+        # label parsing: gesture00 -> 0
         try:
-            # "gesture00" -> 0
-            label_str = filename.split('_')[0].replace('gesture', '')
-            label = int(label_str)
-        except ValueError:
-            print(f"Error parsing label from {filename}")
-            label = -1 # Indicate error
+            lbl = int(os.path.basename(f).split('_')[0].replace('gesture', ''))
+        except:
+            lbl = -1
 
-        # 2. Load Data
         try:
-            # Skips header, pandas handles it by default
-            df = pd.read_csv(file_path)
+            # load & prep
+            raw = pd.read_csv(f).iloc[:, :8].values
+            
+            d = pp.notch(raw)
+            d = pp.bandpass(d)
+            d = pp.norm(d)
+            
+            # spectrogram [8, 33, 81]
+            spec = torch.tensor(pp.get_spec(d), dtype=torch.float32)
 
-            # Take first 8 columns (channels)
-            raw_data = df.iloc[:, :8].values
+            # spec augment (train only)
+            if self.mode == 'train':
+                if np.random.rand() < 0.5: # freq mask
+                    fm = np.random.randint(0, 5)
+                    fs = np.random.randint(0, 33 - fm)
+                    spec[:, fs:fs+fm, :] = 0
+                
+                if np.random.rand() < 0.5: # time mask
+                    tm = np.random.randint(0, 10)
+                    ts = np.random.randint(0, 81 - tm)
+                    spec[:, :, ts:ts+tm] = 0
+
+            return spec, torch.tensor(lbl, dtype=torch.long)
             
         except Exception as e:
-            print(f"Error loading {file_path}: {e}")
+            print(f"err: {f} - {e}")
             return torch.zeros(1), torch.tensor(-1)
-
-        # 3. Preprocess
-        # Apply the pipeline we verified in utils.py
-        # Notch -> Bandpass -> Normalize
-        filtered = preprocessing.apply_notch_filter(raw_data)
-        filtered = preprocessing.apply_bandpass_filter(filtered)
-        normalized = preprocessing.normalize_data(filtered)
-        
-        # 4. Convert to Tensor
-        # Shape: [Time, Channels] -> PyTorch usually expects [Channels, Time] for Conv1d
-        # Let's keep it [Time, Channels] for now and transpose if needed by the model.
-        # But wait, Conv1d needs (Batch, Channels, Length).
-        # Let's transpose it now to be safe: (8, 2560)
-        signal_tensor = torch.tensor(normalized, dtype=torch.float32).transpose(0, 1)
-        
-        label_tensor = torch.tensor(label, dtype=torch.long)
-        
-        return signal_tensor, label_tensor
-
-if __name__ == "__main__":
-
-    dataset = SynapseDataset(root_dir="Synapse_Dataset")
-    
-    if len(dataset) > 0:
-        sig, lbl = dataset[0]
-        print(f"Signal Shape: {sig.shape}") # Should be [8, ~2560]
-        print(f"Label: {lbl}")
-        print(f"Signal Mean: {sig.mean():.4f} (should be ~0)")
-        print(f"Signal Std: {sig.std():.4f} (should be ~1)")
