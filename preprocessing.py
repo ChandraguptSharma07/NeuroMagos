@@ -2,12 +2,7 @@ import numpy as np
 from scipy import signal
 
 def apply_notch_filter(data, fs=512, notch_freq=50.0, quality_factor=30.0):
-    """
-    Applies a notch filter to remove power line noise (e.g., 50Hz).
-    """
     b, a = signal.iirnotch(notch_freq, quality_factor, fs)
-    # Apply along the first axis (assuming data is [samples, channels] or 1D)
-    # If data is pandas df, we might need to handle it, but scipy works on numpy arrays typically.
     filtered_data = signal.filtfilt(b, a, data, axis=0) 
     return filtered_data
 
@@ -23,4 +18,18 @@ def apply_bandpass_filter(data, fs=512, lowcut=20.0, highcut=250.0, order=4):
     b, a = signal.butter(order, [low, high], btype='band')
     filtered_data = signal.filtfilt(b, a, data, axis=0)
     return filtered_data
+
+def normalize_data(data):
+    """
+    Standardize the data (Z-score normalization).
+    Subtract mean and divide by std deviation for each channel.
+    """
+    mean = np.mean(data, axis=0)
+    std = np.std(data, axis=0)
+    
+    # Avoid division by zero
+    std[std == 0] = 1.0
+    
+    normalized_data = (data - mean) / std
+    return normalized_data
 
