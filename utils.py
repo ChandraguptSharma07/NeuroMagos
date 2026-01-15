@@ -1,7 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-
 import preprocessing
 
 # Draft version - just to see the data
@@ -53,8 +52,13 @@ def load_and_view_signals(file_path):
     # 2. Bandpass Filter (20-200Hz)
     filtered_data = preprocessing.apply_bandpass_filter(filtered_data)
     
+    print("Normalizing...")
+    # 3. Z-score Normalization
+    normalized_data = preprocessing.normalize_data(filtered_data)
+    
     print("Plotting comparison for Channel 1...")
-    plot_comparison(raw_data, filtered_data)
+    # Comparing Filtered vs Normalized to see the scale change
+    plot_comparison(filtered_data, normalized_data, channel_idx=0)
 
 if __name__ == "__main__":
     # Just for testing
