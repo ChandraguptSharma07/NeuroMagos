@@ -1,5 +1,5 @@
 import argparse, os, numpy as np, pandas as pd
-import torch, torch.nn as nn, torch.optim as optim
+import torch, torch.nn as nn, torch.nn.functional as F, torch.optim as optim
 from torch.utils.data import DataLoader, Subset
 from tqdm import tqdm
 from dataset import SynapseDataset
@@ -9,6 +9,20 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix, classification_report
 from sklearn.model_selection import KFold
 from torch.optim.swa_utils import AveragedModel, SWALR, update_bn
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=1, gamma=2, reduction='mean'):
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.reduction = reduction
+
+    def forward(self, inputs, targets):
+        ce_loss = F.cross_entropy(inputs, targets, reduction='none', label_smoothing=0.1)
+        pt = torch.exp(-ce_loss)
+        focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+        if self.reduction == 'mean': return focal_loss.mean()
+        return focal_loss.sum()
 
 p = argparse.ArgumentParser()
 p.add_argument("--epochs", type=int, default=30)
@@ -50,7 +64,9 @@ if args.resume and os.path.exists(args.resume):
     m.load_state_dict(torch.load(args.resume, map_location=dev))
 
 opt = optim.Adam(m.parameters(), lr=args.lr, weight_decay=args.wd)
-crit = nn.CrossEntropyLoss(label_smoothing=0.1)
+
+# FOCAL LOSS - The Secret Weapon for Hard Cases
+crit = FocalLoss(gamma=2.0)
 sched = optim.lr_scheduler.ReduceLROnPlateau(opt, mode='max', factor=0.5, patience=5)
 
 swa_m = AveragedModel(m)
@@ -118,7 +134,6 @@ with torch.no_grad():
     for x, y in dl_val:
         x = x.to(dev)
         if args.tta:
-            # avg prediction with/without noise
             o1 = fin_m(x).softmax(1)
             o2 = fin_m(x + torch.randn_like(x)*0.01).softmax(1)
             p = (o1 + o2) / 2
