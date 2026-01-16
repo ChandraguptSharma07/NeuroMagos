@@ -27,7 +27,9 @@ args = p.parse_args()
 
 os.makedirs(args.save_dir, exist_ok=True)
 dev = 'cuda' if torch.cuda.is_available() else 'cpu'
+abs_save = os.path.abspath(args.save_dir)
 print(f"run {args.model} | fold {args.fold}/{args.k_folds} | tta={args.tta} | mix={args.mixup} | swa={args.swa}")
+print(f"SAVING TO CACHE: {abs_save}")
 
 dtype = 'raw' if args.model == 'cnn1d' else 'spec'
 ds = SynapseDataset('Synapse_Dataset', mode='train', type=dtype)
