@@ -49,7 +49,7 @@ if args.resume and os.path.exists(args.resume):
 
 opt = optim.Adam(m.parameters(), lr=args.lr, weight_decay=args.wd)
 crit = nn.CrossEntropyLoss(label_smoothing=0.1)
-sched = optim.lr_scheduler.CosineAnnealingWarmRestarts(opt, T_0=10, T_mult=2)
+sched = optim.lr_scheduler.ReduceLROnPlateau(opt, mode='max', factor=0.5, patience=5, verbose=True)
 
 swa_m = AveragedModel(m)
 swa_sch = SWALR(opt, swa_lr=0.05)
@@ -81,11 +81,6 @@ for e in range(args.epochs):
         opt.step()
         losses.append(loss.item())
         bar.set_postfix(loss=np.mean(losses))
-        
-    if args.swa and e > swa_start:
-        swa_m.update_parameters(m)
-        swa_sch.step()
-    else: sched.step()
     
     # eval
     eval_m = swa_m if (args.swa and e > swa_start) else m
@@ -105,6 +100,11 @@ for e in range(args.epochs):
         best_acc = acc
         torch.save(eval_m.state_dict(), best_f)
         print("saved best")
+
+    if args.swa and e > swa_start:
+        swa_m.update_parameters(m)
+        swa_sch.step()
+    else: sched.step(acc)
 
 # final TTA eval
 print("TTA eval...")
