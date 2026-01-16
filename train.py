@@ -49,7 +49,7 @@ if args.resume and os.path.exists(args.resume):
 
 opt = optim.Adam(m.parameters(), lr=args.lr, weight_decay=args.wd)
 crit = nn.CrossEntropyLoss(label_smoothing=0.1)
-sched = optim.lr_scheduler.ReduceLROnPlateau(opt, mode='max', factor=0.5, patience=5, verbose=True)
+sched = optim.lr_scheduler.ReduceLROnPlateau(opt, mode='max', factor=0.5, patience=5)
 
 swa_m = AveragedModel(m)
 swa_sch = SWALR(opt, swa_lr=0.05)
